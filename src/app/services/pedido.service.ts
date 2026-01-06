@@ -170,7 +170,13 @@ export class PedidoService {
           }
         }))
       }));
-      this._pedidosCocina.next(pedidosFormateados);
+      
+      // FILTRAR: Solo mostrar pedidos que contengan al menos un plato
+      const pedidosConPlatos = pedidosFormateados.filter(pedido => {
+        return pedido.items.some((item: any) => item.producto.categoria === 'plato');
+      });
+      
+      this._pedidosCocina.next(pedidosConPlatos);
     }
   }
 

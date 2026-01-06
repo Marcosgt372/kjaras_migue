@@ -28,9 +28,18 @@ interface PedidoUI extends Pedido {
             <p class="text-xs text-red-200 opacity-80">Sistema de Comandas</p>
           </div>
         </div>
-        <div class="text-right">
-           <p class="text-sm font-bold opacity-80">{{ fechaActual | date:'mediumDate' }}</p>
-           <p class="text-xl font-bold">{{ fechaActual | date:'HH:mm' }}</p>
+        <div class="flex items-center gap-4">
+          <button 
+            (click)="actualizarPedidos()" 
+            [disabled]="isRefreshing"
+            class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg font-bold transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm">
+            <i class="fa-solid fa-rotate-right" [class.animate-spin]="isRefreshing"></i>
+            <span class="hidden sm:inline">{{ isRefreshing ? 'Actualizando...' : 'Actualizar' }}</span>
+          </button>
+          <div class="text-right">
+             <p class="text-sm font-bold opacity-80">{{ fechaActual | date:'mediumDate' }}</p>
+             <p class="text-xl font-bold">{{ fechaActual | date:'HH:mm' }}</p>
+          </div>
         </div>
       </header>
 
@@ -133,6 +142,7 @@ interface PedidoUI extends Pedido {
 export class CocinaComponent {
   fechaActual = new Date();
   pedidosUI$: Observable<PedidoUI[]>;
+  isRefreshing = false;
 
   // Variables para la lógica del drag
   private startX = 0;
@@ -240,5 +250,21 @@ export class CocinaComponent {
             pedido.swipeX = 0; // Cancelar acción
         }
     }
+  }
+
+  actualizarPedidos() {
+    if (this.isRefreshing) return;
+    
+    this.isRefreshing = true;
+    
+    // Llamar al servicio sin esperar
+    this.pedidoService.cargarPedidosCocina().catch(err => {
+      console.error('Error al actualizar pedidos:', err);
+    });
+    
+    // Resetear después de 300ms
+    setTimeout(() => {
+      this.isRefreshing = false;
+    }, 300);
   }
 }

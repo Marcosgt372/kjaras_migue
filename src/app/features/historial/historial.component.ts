@@ -290,13 +290,20 @@ export class HistorialComponent implements OnInit {
       .reduce((acc, p) => acc + (p.total || 0), 0);
   }
 
-  async actualizarDatos() {
+  actualizarDatos() {
+    if (this.cargando) return;
+    
     this.cargando = true;
-    try {
-      await this.cargarDatos();
-    } finally {
+    
+    // Llamar al servicio sin esperar
+    this.cargarDatos().catch(err => {
+      console.error('Error al actualizar datos:', err);
+    });
+    
+    // Resetear después de 300ms
+    setTimeout(() => {
       this.cargando = false;
-    }
+    }, 300);
   }
 
   volverACaja() {
