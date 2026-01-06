@@ -277,6 +277,20 @@ export interface ItemPedido {
               </button>
             </div>
 
+            <!-- Selector de Tipo de Orden -->
+            <div class="grid grid-cols-2 gap-2 lg:gap-3 mb-3 lg:mb-4">
+              <button (click)="tipoOrdenSeleccionado = 'para_llevar'" 
+                      [class]="tipoOrdenSeleccionado === 'para_llevar' ? 'bg-orange-100 border-orange-500 text-orange-700' : 'bg-white border-gray-200'"
+                      class="p-2.5 lg:p-3 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition text-xs lg:text-sm hover:scale-105">
+                 <i class="fa-solid fa-bag-shopping"></i> Para Llevar
+              </button>
+              <button (click)="tipoOrdenSeleccionado = 'mesa'" 
+                      [class]="tipoOrdenSeleccionado === 'mesa' ? 'bg-purple-100 border-purple-500 text-purple-700' : 'bg-white border-gray-200'"
+                      class="p-2.5 lg:p-3 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition text-xs lg:text-sm hover:scale-105">
+                 <i class="fa-solid fa-utensils"></i> Mesa
+              </button>
+            </div>
+
             <button (click)="enviarPedido()" 
                     [disabled]="carrito.length === 0 || !mesaSeleccionada || cargando || !cajaAbierta"
                     class="w-full bg-[#800020] text-white py-3 lg:py-4 rounded-xl font-bold text-sm lg:text-base shadow-lg shadow-red-900/20 hover:bg-[#600018] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
@@ -334,8 +348,8 @@ export class CajaComponent implements OnInit {
   carritoAbierto: boolean = false; // Para controlar el carrito en móviles
   
   // Datos Formulario Caja
-  usuarioActual: string = 'Juan Perez';
-  montoApertura: number = 200;
+  usuarioActual: string = '';
+  montoApertura: number = 0;
   montoCierre: number = 0;
 
   // Datos TPV
@@ -345,6 +359,7 @@ export class CajaComponent implements OnInit {
   cargando: boolean = false;
   cargandoProductos: boolean = true; // Estado de carga para productos
   metodoPagoSeleccionado: 'efectivo' | 'qr' = 'efectivo';
+  tipoOrdenSeleccionado: 'para_llevar' | 'mesa' = 'mesa'; // Tipo de orden
   
   productos: Producto[] = [];
   carrito: ItemPedido[] = [];
@@ -379,6 +394,12 @@ export class CajaComponent implements OnInit {
   }
 
   ngOnInit() {
+    // Recuperar nombre de usuario guardado
+    const usuarioGuardado = localStorage.getItem('usuarioCaja');
+    if (usuarioGuardado) {
+      this.usuarioActual = usuarioGuardado;
+    }
+    
     // 1. Cargar productos
     this.pedidoService.productos$.subscribe(data => {
       this.productos = data;
@@ -398,8 +419,8 @@ export class CajaComponent implements OnInit {
   }
 
   async abrirCaja() {
-    if (this.montoApertura < 0 || !this.usuarioActual) {
-      alert('⚠️ Por favor ingresa un monto válido y tu nombre.');
+    if (!this.usuarioActual || this.montoApertura <= 0) {
+      alert('⚠️ Completa todos los campos.');
       return;
     }
     
@@ -410,6 +431,9 @@ export class CajaComponent implements OnInit {
     
     this.cargandoApertura = true;
     
+    // Guardar nombre de usuario en localStorage
+    localStorage.setItem('usuarioCaja', this.usuarioActual);
+
     try {
       const resultado = await this.pedidoService.abrirCaja(this.montoApertura, this.usuarioActual);
       
@@ -535,7 +559,8 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
         this.mesaSeleccionada, 
         this.total, 
         this.carrito,
-        this.metodoPagoSeleccionado
+        this.metodoPagoSeleccionado,
+        this.tipoOrdenSeleccionado // Agregar tipo de orden
       );
 
       if (resultado) {

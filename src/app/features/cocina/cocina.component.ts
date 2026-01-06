@@ -91,7 +91,19 @@ interface PedidoUI extends Pedido {
               <div class="p-5 border-b border-gray-100 flex justify-between items-start"
                    [ngClass]="{'bg-yellow-50': pedido.estado === 'cocinando', 'bg-white': pedido.estado === 'pendiente'}">
                  <div>
-                   <h2 class="text-2xl font-black text-gray-800">Mesa {{ pedido.mesa }}</h2>
+                   <!-- Mostrar tipo de orden con ícono -->
+                   <div class="flex items-center gap-2 mb-1">
+                     <ng-container *ngIf="pedido.opcion === 'para_llevar'">
+                       <i class="fa-solid fa-bag-shopping text-orange-500 text-xl"></i>
+                       <h2 class="text-2xl font-black text-gray-800">Para Llevar</h2>
+                     </ng-container>
+                     <ng-container *ngIf="pedido.opcion === 'mesa' || !pedido.opcion">
+                       <i class="fa-solid fa-utensils text-purple-500 text-xl"></i>
+                       <h2 class="text-2xl font-black text-gray-800">Mesa</h2>
+                     </ng-container>
+                   </div>
+                   <!-- Mostrar nombre/mesa del cliente -->
+                   <p class="text-lg font-bold text-gray-600 ml-7">{{ pedido.mesa }}</p>
                    <span class="inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold uppercase"
                          [ngClass]="{'bg-yellow-100 text-yellow-700': pedido.estado === 'cocinando', 'bg-gray-100 text-gray-500': pedido.estado === 'pendiente'}">
                      {{ pedido.estado === 'cocinando' ? '🔥 Cocinando' : '⏳ Pendiente' }}
@@ -147,6 +159,10 @@ export class CocinaComponent {
   // Variables para la lógica del drag
   private startX = 0;
   private currentX = 0;
+  
+  // Variables para notificación de sonido
+  private cantidadPedidosAnterior = 0;
+  private audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUKXh8LRkHAU2kdXzzHksBSN2x/DdkUALFF+z6eunVRULRp/g8r5sIQYpgc7y2Ik3CBtpvfDknE4MDlCl4fC0ZBwGNpHV88x5LAUjdsfw3ZFACxRfs+nrp1UVC0af4PK+bCEGKYHO8tmJNwgbab3w5JxODA5QpeHwtGQcBjaR1fPMeSwFI3bH8N2RQAsUX7Pp66dVFQtGn+DyvmwhBimBzvLZiTcIG2m98OScTgwOUKXh8LRkHAY2kdXzzHksBSN2x/DdkUALFF+z6eunVRULRp/g8r5sIQYpgc7y2Yk3CBtpvfDknE4MDlCl4fC0ZBwGNpHV88x5LAUjdsfw3ZFACxRfs+nrp1UVC0af4PK+bCEGKYHO8tmJNwgbab3w5JxODA5QpeHwtGQcBjaR1fPMeSwFI3bH8N2RQAsUX7Pp66dVFQtGn+DyvmwhBimBzvLZiTcIG2m98OScTgwOUKXh8LRkHAY2kdXzzHksBSN2x/DdkUALFF+z6eunVRULRp/g8r5sIQYpgc7y2Yk3CBtpvfDknE4MDlCl4fC0ZBwGNpHV88x5LAUjdsfw3ZFACxRfs+nrp1UVC0af4PK+bCEGKYHO8tmJNwgbab3w5JxODA5QpeHwtGQcBjaR1fPMeSwFI3bH8N2RQAsUX7Pp66dVFQtGn+DyvmwhBimBzvLZiTcIG2m98OScTgwOUKXh8LRkHAY2kdXzzHksBSN2x/DdkUALFF+z6eunVRULRp/g8r5sIQYpgc7y2Yk3CBtpvfDknE4MDlCl4fC0ZBwGNpHV88x5LAUjdsfw3ZFACxRfs+nrp1UVC0af4PK+bCEGKYHO');
 
   constructor(private pedidoService: PedidoService) {
     // Mapeamos los pedidos del servicio a nuestra interfaz UI local con propiedades de swipe
@@ -159,9 +175,21 @@ export class CocinaComponent {
         animating: false
       })))
     );
+    
+    // Suscribirse a cambios en pedidos para reproducir sonido
+    this.pedidoService.pedidosCocina$.subscribe(pedidos => {
+      if (pedidos.length > this.cantidadPedidosAnterior && this.cantidadPedidosAnterior > 0) {
+        this.reproducirSonido();
+      }
+      this.cantidadPedidosAnterior = pedidos.length;
+    });
 
     // Actualizar reloj
     setInterval(() => this.fechaActual = new Date(), 60000);
+  }
+  
+  reproducirSonido() {
+    this.audio.play().catch(err => console.log('No se pudo reproducir el sonido:', err));
   }
 
   // --- LÓGICA DE GESTOS (SWIPE) ---
