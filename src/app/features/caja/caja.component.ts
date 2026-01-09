@@ -148,7 +148,33 @@ export interface ItemPedido {
                </div>
              </div>
 
-             <!-- Productos reales -->
+             <!-- Tarjeta de Producto Personalizado (siempre visible) -->
+             <div *ngIf="!cargandoProductos" class="bg-gradient-to-br from-blue-50 to-blue-100 p-2.5 lg:p-3 rounded-2xl lg:rounded-[30px] shadow-sm border-2 border-blue-300 border-dashed flex flex-col h-full">
+               <div class="flex-1 flex flex-col justify-center p-2">
+                 <div class="text-center mb-2">
+                   <i class="fa-solid fa-plus-circle text-3xl text-blue-500 mb-1"></i>
+                   <p class="text-xs font-bold text-blue-700">Producto Personalizado</p>
+                 </div>
+                 
+                 <input type="text" 
+                        [(ngModel)]="productoPersonalizadoNombre"
+                        placeholder="Nombre"
+                        class="w-full px-2 py-1.5 text-xs border border-blue-300 rounded-lg mb-2 focus:border-blue-500 focus:outline-none">
+                 
+                 <input type="number" 
+                        [(ngModel)]="productoPersonalizadoPrecio"
+                        placeholder="Precio (Bs)"
+                        class="w-full px-2 py-1.5 text-xs border border-blue-300 rounded-lg mb-2 focus:border-blue-500 focus:outline-none">
+                 
+                 <button (click)="agregarProductoPersonalizado()"
+                         [disabled]="!productoPersonalizadoNombre || productoPersonalizadoPrecio <= 0"
+                         class="w-full bg-blue-500 text-white py-2 rounded-lg text-xs font-bold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                   Agregar
+                 </button>
+               </div>
+             </div>
+
+             <!-- Productos del menú -->
              <div *ngIf="!cargandoProductos" class="contents">
                <div *ngFor="let p of productosFiltrados; let i = index" 
                     (click)="agregarAlCarrito(p)" 
@@ -291,6 +317,29 @@ export interface ItemPedido {
               </button>
             </div>
 
+            <!-- Calculadora de Cambio (solo para efectivo) -->
+            <div *ngIf="metodoPagoSeleccionado === 'efectivo'" class="mb-3 lg:mb-4 p-3 bg-white rounded-xl border-2 border-gray-200">
+              <label class="block text-xs font-bold text-gray-600 mb-2">Monto Recibido</label>
+              <input type="number" 
+                     [(ngModel)]="montoRecibido"
+                     placeholder="Ej: 100"
+                     class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-lg font-bold text-center focus:border-green-500 focus:outline-none">
+              
+              <div *ngIf="montoRecibido > 0" class="mt-3 pt-3 border-t border-gray-200">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm font-bold text-gray-600">Cambio:</span>
+                  <span class="text-2xl font-black" 
+                        [class.text-green-600]="cambio >= 0"
+                        [class.text-red-600]="cambio < 0">
+                    {{ cambio }} Bs
+                  </span>
+                </div>
+                <p *ngIf="cambio < 0" class="text-xs text-red-500 mt-1 text-center">
+                  ⚠️ Monto insuficiente
+                </p>
+              </div>
+            </div>
+
             <button (click)="enviarPedido()" 
                     [disabled]="carrito.length === 0 || !mesaSeleccionada || cargando || !cajaAbierta"
                     class="w-full bg-[#800020] text-white py-3 lg:py-4 rounded-xl font-bold text-sm lg:text-base shadow-lg shadow-red-900/20 hover:bg-[#600018] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
@@ -360,6 +409,11 @@ export class CajaComponent implements OnInit {
   cargandoProductos: boolean = true; // Estado de carga para productos
   metodoPagoSeleccionado: 'efectivo' | 'qr' = 'efectivo';
   tipoOrdenSeleccionado: 'para_llevar' | 'mesa' = 'mesa'; // Tipo de orden
+  montoRecibido: number = 0; // Monto que da el cliente en efectivo
+  
+  // Producto personalizado
+  productoPersonalizadoNombre: string = '';
+  productoPersonalizadoPrecio: number = 0;
   
   productos: Producto[] = [];
   carrito: ItemPedido[] = [];
@@ -526,6 +580,31 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
     return this.carrito.reduce((acc, i) => acc + i.subtotal, 0); 
   }
 
+  get cambio() {
+    return this.montoRecibido - this.total;
+  }
+
+  agregarProductoPersonalizado() {
+    if (!this.productoPersonalizadoNombre || this.productoPersonalizadoPrecio <= 0) return;
+    
+    // Crear un producto temporal con ID negativo para diferenciarlo
+    const productoTemp: Producto = {
+      id: -Date.now(), // ID temporal negativo basado en timestamp
+      nombre: this.productoPersonalizadoNombre,
+      precio: this.productoPersonalizadoPrecio,
+      categoria: 'personalizado',
+      stock: 999,
+      imagen: 'https://via.placeholder.com/150?text=Personalizado',
+      activo: true
+    };
+    
+    this.agregarAlCarrito(productoTemp);
+    
+    // Limpiar campos
+    this.productoPersonalizadoNombre = '';
+    this.productoPersonalizadoPrecio = 0;
+  }
+
   agregarAlCarrito(p: Producto) {
     const item = this.carrito.find(i => i.producto.id === p.id);
     if(item) { 
@@ -551,6 +630,12 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
 
   async enviarPedido() {
     if (!this.mesaSeleccionada || this.carrito.length === 0) return;
+
+    // Validar monto en efectivo
+    if (this.metodoPagoSeleccionado === 'efectivo' && this.montoRecibido < this.total) {
+      alert('⚠️ El monto recibido es insuficiente. Por favor ingresa un monto mayor o igual al total.');
+      return;
+    }
 
     this.cargando = true;
 
@@ -582,7 +667,8 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
             notas: item.notas || ''
           })),
           total: this.total,
-          metodoPago: this.metodoPagoSeleccionado
+          metodoPago: this.metodoPagoSeleccionado,
+          tipoOrden: this.tipoOrdenSeleccionado
         };
         
         // IMPORTANTE: Resetear el estado de carga ANTES de mostrar la animación
@@ -605,6 +691,7 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
           this.carrito = [];
           this.mesaSeleccionada = '';
           this.ultimoPedidoId = null;
+          this.montoRecibido = 0; // Resetear monto recibido
           
           // Forzar detección de cambios después de resetear
           this.cdr.detectChanges();

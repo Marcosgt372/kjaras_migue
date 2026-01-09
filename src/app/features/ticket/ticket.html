@@ -22,6 +22,10 @@
         <span>Mesa/Cliente:</span>
         <span class="font-bold">{{ ticketData.mesa }}</span>
       </div>
+      <div class="flex justify-between my-0.5" *ngIf="ticketData.tipoOrden">
+        <span>Tipo:</span>
+        <span class="font-bold">{{ ticketData.tipoOrden === 'para_llevar' ? 'PARA LLEVAR' : 'MESA' }}</span>
+      </div>
       <div class="flex justify-between my-0.5">
         <span>Pedido:</span>
         <span>#{{ ticketData.pedidoId }}</span>
