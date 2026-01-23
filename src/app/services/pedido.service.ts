@@ -33,6 +33,7 @@ export interface Pedido extends Omit<PedidoBase, 'fecha' | 'creadoPor' | 'items'
   created_at?: string;
   metodo_pago?: string;
   cierre_id?: number;
+  opcion?: string; // Tipo de orden: para_llevar o mesa
   items: ItemPedido[];
 }
 
@@ -92,7 +93,7 @@ export class PedidoService {
   }
 
   // --- 2. CREAR PEDIDO (Para Caja) ---
-  async crearPedido(mesa: string, total: number, itemsCarrito: any[], metodoPago: string = 'efectivo') {
+  async crearPedido(mesa: string, total: number, itemsCarrito: any[], metodoPago: string = 'efectivo', tipoOrden: string = 'mesa') {
     // Validar que haya caja abierta
     if (!this.cajaActualId) {
       alert('⚠️ Debes ABRIR CAJA antes de vender.');
@@ -100,7 +101,7 @@ export class PedidoService {
     }
 
     try {
-      // A. Insertar Cabecera con metodo_pago y cierre_id
+      // A. Insertar Cabecera con metodo_pago, cierre_id y opcion (tipo de orden)
       const { data: pedido, error } = await this.supabase
         .from('pedidos')
         .insert({ 
@@ -108,7 +109,8 @@ export class PedidoService {
           total, 
           estado: 'pendiente',
           metodo_pago: metodoPago,
-          cierre_id: this.cajaActualId 
+          cierre_id: this.cajaActualId,
+          opcion: tipoOrden // Guardar tipo de orden (para_llevar o mesa)
         })
         .select()
         .single();
@@ -170,7 +172,13 @@ export class PedidoService {
           }
         }))
       }));
-      this._pedidosCocina.next(pedidosFormateados);
+      
+      // FILTRAR: Solo mostrar pedidos que contengan al menos un plato
+      const pedidosConPlatos = pedidosFormateados.filter(pedido => {
+        return pedido.items.some((item: any) => item.producto.categoria === 'plato');
+      });
+      
+      this._pedidosCocina.next(pedidosConPlatos);
     }
   }
 

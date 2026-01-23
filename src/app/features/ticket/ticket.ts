@@ -11,6 +11,7 @@ export interface TicketData {
   items: TicketItem[];
   total: number;
   metodoPago: 'efectivo' | 'qr';
+  tipoOrden?: 'para_llevar' | 'mesa';
 }
 
 export interface TicketItem {
