@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { PedidoService } from '../../services/pedido.service';
 
+
 @Component({
   selector: 'app-historial',
   standalone: true,
@@ -128,6 +129,7 @@ import { PedidoService } from '../../services/pedido.service';
               <th class="p-4">Método</th>
               <th class="p-4">Estado</th>
               <th class="p-4 text-right">Monto</th>
+              <th class="p-4 text-center">Acciones</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -170,6 +172,12 @@ import { PedidoService } from '../../services/pedido.service';
                 </span>
               </td>
               <td class="p-4 text-right font-bold text-lg text-gray-800">{{ pedido.total }} Bs</td>
+              <td class="p-4 text-center">
+                <button (click)="abrirModalEdicion(pedido)" 
+                        class="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-600 transition text-sm">
+                  <i class="fa-solid fa-edit mr-1"></i> Detalle
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -177,6 +185,152 @@ import { PedidoService } from '../../services/pedido.service';
         <div *ngIf="pedidosFiltrados.length === 0" class="p-10 text-center text-gray-400">
           <i class="fa-solid fa-inbox text-4xl mb-4"></i>
           <p class="font-bold">No hay pedidos que coincidan con los filtros.</p>
+        </div>
+      </div>
+
+      <!-- Modal de Edición de Pedido -->
+      <div *ngIf="mostrarModalEdicion" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+          
+          <!-- Header -->
+          <div class="bg-[#800020] p-6 text-white relative">
+            <button (click)="cerrarModalEdicion()" 
+                    class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 transition flex items-center justify-center">
+              <i class="fa-solid fa-times text-xl"></i>
+            </button>
+            <h3 class="text-2xl font-bold">Editar Pedido #{{ pedidoEditando?.id }}</h3>
+            <p class="opacity-80 text-sm">Modifica los detalles del pedido</p>
+          </div>
+
+          <!-- Content -->
+          <div class="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+            
+            <!-- Información del Pedido -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+              <div>
+                <label class="text-xs font-bold text-gray-400 uppercase mb-2 block">Mesa / Cliente</label>
+                <input [(ngModel)]="pedidoEditando.mesa" 
+                       type="text" 
+                       class="w-full bg-gray-50 rounded-lg px-4 py-2 font-bold border border-gray-200 focus:border-[#800020] outline-none">
+              </div>
+              
+              <div>
+                <label class="text-xs font-bold text-gray-400 uppercase mb-2 block">Estado</label>
+                <select [(ngModel)]="pedidoEditando.estado" 
+                        class="w-full bg-gray-50 rounded-lg px-4 py-2 font-bold border border-gray-200 focus:border-[#800020] outline-none">
+                  <option value="pendiente">Pendiente</option>
+                  <option value="cocinando">Cocinando</option>
+                  <option value="listo">Listo</option>
+                  <option value="entregado">Entregado</option>
+                  <option value="rechazado">Rechazado</option>
+                </select>
+              </div>
+              
+              <div>
+                <label class="text-xs font-bold text-gray-400 uppercase mb-2 block">Método de Pago</label>
+                <select [(ngModel)]="pedidoEditando.metodo_pago" 
+                        class="w-full bg-gray-50 rounded-lg px-4 py-2 font-bold border border-gray-200 focus:border-[#800020] outline-none">
+                  <option value="efectivo">Efectivo</option>
+                  <option value="qr">QR</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Items del Pedido -->
+            <div class="mb-6">
+              <div class="flex justify-between items-center mb-3">
+                <h4 class="text-lg font-bold text-gray-800">Items del Pedido</h4>
+                <button (click)="agregarItem()" 
+                        class="bg-green-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-600 transition text-sm">
+                  <i class="fa-solid fa-plus mr-1"></i> Agregar Item
+                </button>
+              </div>
+
+              <div class="space-y-3">
+                <div *ngFor="let item of itemsEditados; let i = index" 
+                     class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <div class="grid grid-cols-12 gap-3 items-center">
+                    
+                    <!-- Nombre -->
+                    <div class="col-span-4">
+                      <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Nombre</label>
+                      <input [(ngModel)]="item.nombre" 
+                             type="text" 
+                             class="w-full bg-white rounded-lg px-3 py-2 text-sm border border-gray-200 focus:border-[#800020] outline-none">
+                    </div>
+                    
+                    <!-- Cantidad -->
+                    <div class="col-span-2">
+                      <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Cant.</label>
+                      <input [(ngModel)]="item.cantidad" 
+                             (input)="actualizarSubtotal(i)"
+                             type="number" 
+                             min="1"
+                             class="w-full bg-white rounded-lg px-3 py-2 text-sm border border-gray-200 focus:border-[#800020] outline-none">
+                    </div>
+                    
+                    <!-- Precio Unitario -->
+                    <div class="col-span-2">
+                      <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Precio</label>
+                      <input [(ngModel)]="item.precio_unitario" 
+                             (input)="actualizarSubtotal(i)"
+                             type="number" 
+                             min="0"
+                             step="0.01"
+                             class="w-full bg-white rounded-lg px-3 py-2 text-sm border border-gray-200 focus:border-[#800020] outline-none">
+                    </div>
+                    
+                    <!-- Subtotal -->
+                    <div class="col-span-2">
+                      <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Subtotal</label>
+                      <div class="bg-gray-100 rounded-lg px-3 py-2 text-sm font-bold text-gray-800">
+                        {{ item.subtotal }} Bs
+                      </div>
+                    </div>
+                    
+                    <!-- Notas -->
+                    <div class="col-span-1">
+                      <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Notas</label>
+                      <input [(ngModel)]="item.notas" 
+                             type="text" 
+                             placeholder="..."
+                             class="w-full bg-white rounded-lg px-3 py-2 text-sm border border-gray-200 focus:border-[#800020] outline-none">
+                    </div>
+                    
+                    <!-- Eliminar -->
+                    <div class="col-span-1 flex items-end">
+                      <button (click)="eliminarItem(i)" 
+                              class="w-full bg-red-50 text-red-500 p-2 rounded-lg hover:bg-red-100 transition">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Total -->
+            <div class="bg-[#800020]/10 p-4 rounded-xl">
+              <div class="flex justify-between items-center">
+                <span class="text-lg font-bold text-gray-800">Total del Pedido:</span>
+                <span class="text-3xl font-black text-[#800020]">{{ totalEditado }} Bs</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Footer -->
+          <div class="p-6 bg-gray-50 flex gap-3">
+            <button (click)="cerrarModalEdicion()" 
+                    class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition">
+              Cancelar
+            </button>
+            <button (click)="guardarCambios()" 
+                    class="flex-1 bg-[#800020] text-white py-3 rounded-xl font-bold hover:bg-[#600018] transition">
+              <i class="fa-solid fa-save mr-2"></i> Guardar Cambios
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -209,6 +363,12 @@ export class HistorialComponent implements OnInit {
   promedioPorPedido: number = 0;
   totalEfectivo: number = 0;
   totalQR: number = 0;
+  
+  // Modal de edición
+  mostrarModalEdicion = false;
+  pedidoEditando: any = null;
+  itemsEditados: any[] = [];
+  totalEditado: number = 0;
 
   constructor(
     private pedidoService: PedidoService,
@@ -221,6 +381,8 @@ export class HistorialComponent implements OnInit {
 
   async cargarDatos() {
     this.todosPedidos = await this.pedidoService.obtenerTodosPedidos();
+    console.log('📊 Pedidos cargados:', this.todosPedidos);
+    console.log('📦 Primer pedido detalles:', this.todosPedidos[0]?.detalle_pedidos);
     this.aplicarFiltros();
   }
 
@@ -308,6 +470,83 @@ export class HistorialComponent implements OnInit {
 
   volverACaja() {
     this.router.navigate(['/caja']);
+  }
+  
+  // Métodos del modal de edición
+  abrirModalEdicion(pedido: any) {
+    this.pedidoEditando = { ...pedido };
+    this.itemsEditados = pedido.detalle_pedidos.map((d: any) => ({
+      id: d.id,
+      producto_id: d.producto_id,
+      nombre: d.productos?.nombre || 'Producto',
+      cantidad: d.cantidad,
+      precio_unitario: d.precio_unitario,
+      subtotal: d.cantidad * d.precio_unitario,
+      notas: d.notas || ''
+    }));
+    this.calcularTotalEditado();
+    this.mostrarModalEdicion = true;
+  }
+  
+  cerrarModalEdicion() {
+    this.mostrarModalEdicion = false;
+    this.pedidoEditando = null;
+    this.itemsEditados = [];
+    this.totalEditado = 0;
+  }
+  
+  agregarItem() {
+    this.itemsEditados.push({
+      id: null,
+      producto_id: null,
+      nombre: 'Nuevo Item',
+      cantidad: 1,
+      precio_unitario: 0,
+      subtotal: 0,
+      notas: ''
+    });
+  }
+  
+  eliminarItem(index: number) {
+    this.itemsEditados.splice(index, 1);
+    this.calcularTotalEditado();
+  }
+  
+  actualizarSubtotal(index: number) {
+    const item = this.itemsEditados[index];
+    item.subtotal = item.cantidad * item.precio_unitario;
+    this.calcularTotalEditado();
+  }
+  
+  calcularTotalEditado() {
+    this.totalEditado = this.itemsEditados.reduce((sum, item) => sum + item.subtotal, 0);
+  }
+  
+  async guardarCambios() {
+    if (!this.pedidoEditando) return;
+    
+    try {
+      // Actualizar pedido con los nuevos datos
+      await this.pedidoService.actualizarPedido(
+        this.pedidoEditando.id,
+        {
+          mesa: this.pedidoEditando.mesa,
+          estado: this.pedidoEditando.estado,
+          metodo_pago: this.pedidoEditando.metodo_pago,
+          total: this.totalEditado,
+          items: this.itemsEditados
+        }
+      );
+      
+      // Recargar datos desde la base de datos para garantizar consistencia
+      await this.cargarDatos();
+      
+      alert('✅ Pedido actualizado correctamente');
+      this.cerrarModalEdicion();
+    } catch (error) {
+      console.error('Error al guardar cambios:', error);
+      alert('❌ Error al actualizar el pedido');
+    }
   }
 
   async realizarCierre() {

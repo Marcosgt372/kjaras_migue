@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { PedidoService, Producto } from '../../services/pedido.service';
+import { BnbService } from '../../../../../src/app/services/bnb.service';
 import { TicketComponent } from '../ticket/ticket';
 
 
@@ -12,6 +13,8 @@ export interface ItemPedido {
   cantidad: number;
   subtotal: number;
   notas?: string;
+  nombrePersonalizado?: string; // Para productos personalizados
+  precioPersonalizado?: number; // Para productos personalizados
 }
 
 @Component({
@@ -79,6 +82,48 @@ export interface ItemPedido {
                <span *ngIf="cargandoCierre">Cerrando...</span>
              </button>
            </div>
+        </div>
+      </div>
+
+      <!-- Modal de Pago QR -->
+      <div *ngIf="mostrarModalQR" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden relative text-center">
+            
+            <div class="bg-[#800020] p-6 text-white">
+              <h3 class="text-xl font-bold">Escanea para Pagar</h3>
+              <p class="opacity-80 text-sm">QR Simple - BNB</p>
+            </div>
+
+            <div class="p-8 flex flex-col items-center justify-center min-h-[300px]">
+               
+               <div *ngIf="estadoPago === 'esperando'" class="space-y-4">
+                  <div class="p-2 border-4 border-dashed border-[#800020]/20 rounded-2xl inline-block">
+                     <img [src]="qrImageBase64" class="w-64 h-64 object-contain rounded-xl">
+                  </div>
+                  
+                  <p class="font-bold text-2xl text-gray-800">{{ total }} Bs</p>
+                  
+                  <div class="flex items-center justify-center gap-2 text-gray-500 text-sm animate-pulse">
+                     <i class="fa-solid fa-spinner fa-spin"></i> Esperando confirmación del banco...
+                  </div>
+               </div>
+
+               <div *ngIf="estadoPago === 'pagado'" class="animate-bounce-in">
+                  <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                     <i class="fa-solid fa-check text-5xl text-green-500"></i>
+                  </div>
+                  <h3 class="text-2xl font-black text-gray-800">¡Pago Exitoso!</h3>
+                  <p class="text-gray-500">Procesando ticket...</p>
+               </div>
+
+            </div>
+
+            <div *ngIf="estadoPago === 'esperando'" class="p-4 bg-gray-50">
+               <button (click)="cancelarQR()" class="text-red-500 font-bold text-sm hover:underline">
+                  Cancelar Operación
+               </button>
+            </div>
+
         </div>
       </div>
 
@@ -262,7 +307,7 @@ export interface ItemPedido {
                   <img [src]="item.producto.imagen" class="w-16 h-16 lg:w-18 lg:h-18 rounded-xl object-cover border-2 border-white shadow-sm flex-shrink-0">
                   <div class="flex-1 min-w-0">
                      <div class="flex justify-between gap-2 mb-1">
-                        <h4 class="font-bold text-gray-800 text-sm lg:text-base">{{ item.producto.nombre }}</h4>
+                        <h4 class="font-bold text-gray-800 text-sm lg:text-base">{{ item.nombrePersonalizado || item.producto.nombre }}</h4>
                         <button (click)="eliminarDelCarrito(i)" class="w-6 h-6 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center flex-shrink-0 transition">
                           <i class="fa-solid fa-trash text-xs"></i>
                         </button>
@@ -411,9 +456,17 @@ export class CajaComponent implements OnInit {
   tipoOrdenSeleccionado: 'para_llevar' | 'mesa' = 'mesa'; // Tipo de orden
   montoRecibido: number = 0; // Monto que da el cliente en efectivo
   
+  // Variables para QR BNB
+  mostrarModalQR = false;
+  qrImageBase64: string | null = null;
+  qrIdActual: number | null = null;
+  estadoPago: 'esperando' | 'pagado' | 'error' = 'esperando';
+  pollingInterval: any;
+  
   // Producto personalizado
   productoPersonalizadoNombre: string = '';
   productoPersonalizadoPrecio: number = 0;
+  private readonly PRODUCTO_PLANTILLA_ID = 32; // ID del producto plantilla en la BD
   
   productos: Producto[] = [];
   carrito: ItemPedido[] = [];
@@ -436,7 +489,8 @@ export class CajaComponent implements OnInit {
   constructor(
     private pedidoService: PedidoService,
     private cdr: ChangeDetectorRef,
-    private router: Router
+    private router: Router,
+    private bnbService: BnbService
   ) {}
 
   toggleCarrito() {
@@ -584,32 +638,66 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
     return this.montoRecibido - this.total;
   }
 
-  agregarProductoPersonalizado() {
-    if (!this.productoPersonalizadoNombre || this.productoPersonalizadoPrecio <= 0) return;
+  async agregarProductoPersonalizado() {
+    if (!this.productoPersonalizadoNombre || this.productoPersonalizadoPrecio <= 0) {
+      alert('⚠️ Por favor completa el nombre y precio del producto.');
+      return;
+    }
     
-    // Crear un producto temporal con ID negativo para diferenciarlo
-    const productoTemp: Producto = {
-      id: -Date.now(), // ID temporal negativo basado en timestamp
-      nombre: this.productoPersonalizadoNombre,
-      precio: this.productoPersonalizadoPrecio,
-      categoria: 'personalizado',
-      stock: 999,
-      imagen: 'https://via.placeholder.com/150?text=Personalizado',
-      activo: true
-    };
+    // Buscar el producto plantilla en la lista de productos
+    const productoPlantilla = this.productos.find(p => p.id === this.PRODUCTO_PLANTILLA_ID);
     
-    this.agregarAlCarrito(productoTemp);
+    if (!productoPlantilla) {
+      alert('❌ Error: No se encontró el producto plantilla. Verifica que existe un producto con ID 32 en la base de datos.');
+      return;
+    }
     
-    // Limpiar campos
+    console.log('✅ Usando producto plantilla:', productoPlantilla);
+    console.log('📝 Nombre personalizado:', this.productoPersonalizadoNombre);
+    console.log('💰 Precio personalizado:', this.productoPersonalizadoPrecio);
+    
+    // Guardar valores antes de limpiar
+    const nombrePersonalizado = this.productoPersonalizadoNombre;
+    const precioPersonalizado = this.productoPersonalizadoPrecio;
+    
+    // Limpiar campos inmediatamente para mejor UX
     this.productoPersonalizadoNombre = '';
     this.productoPersonalizadoPrecio = 0;
+    
+    // Buscar si ya existe este producto personalizado en el carrito
+    const itemExistente = this.carrito.find(
+      i => i.producto.id === this.PRODUCTO_PLANTILLA_ID && 
+           i.nombrePersonalizado === nombrePersonalizado &&
+           i.precioPersonalizado === precioPersonalizado
+    );
+    
+    if (itemExistente) {
+      // Si ya existe, solo aumentar cantidad
+      itemExistente.cantidad++;
+      itemExistente.subtotal = itemExistente.cantidad * precioPersonalizado;
+      console.log('✅ Cantidad aumentada para producto existente');
+    } else {
+      // Agregar nuevo item con valores personalizados
+      this.carrito.push({
+        producto: productoPlantilla,
+        cantidad: 1,
+        subtotal: precioPersonalizado,
+        notas: '',
+        nombrePersonalizado: nombrePersonalizado,
+        precioPersonalizado: precioPersonalizado
+      });
+      console.log('✅ Producto personalizado agregado al carrito');
+    }
   }
 
   agregarAlCarrito(p: Producto) {
-    const item = this.carrito.find(i => i.producto.id === p.id);
+    // No incrementar productos personalizados desde el botón + del carrito
+    // porque cada uno tiene nombre/precio único
+    const item = this.carrito.find(i => i.producto.id === p.id && !i.nombrePersonalizado);
     if(item) { 
         item.cantidad++; 
-        item.subtotal = item.cantidad * p.precio; 
+        const precioUnitario = item.precioPersonalizado || p.precio;
+        item.subtotal = item.cantidad * precioUnitario; 
     } else { 
         this.carrito.push({producto: p, cantidad: 1, subtotal: p.precio, notas: ''}); 
     }
@@ -618,7 +706,8 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
   disminuirCantidad(i: number) {
     if(this.carrito[i].cantidad > 1) {
         this.carrito[i].cantidad--;
-        this.carrito[i].subtotal = this.carrito[i].cantidad * this.carrito[i].producto.precio;
+        const precioUnitario = this.carrito[i].precioPersonalizado || this.carrito[i].producto.precio;
+        this.carrito[i].subtotal = this.carrito[i].cantidad * precioUnitario;
     } else {
         this.eliminarDelCarrito(i);
     }
@@ -631,12 +720,102 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
   async enviarPedido() {
     if (!this.mesaSeleccionada || this.carrito.length === 0) return;
 
-    // Validar monto en efectivo
-    if (this.metodoPagoSeleccionado === 'efectivo' && this.montoRecibido < this.total) {
-      alert('⚠️ El monto recibido es insuficiente. Por favor ingresa un monto mayor o igual al total.');
-      return;
+    // Si es EFECTIVO, validar monto recibido
+    if (this.metodoPagoSeleccionado === 'efectivo') {
+      if (this.montoRecibido < this.total) {
+        alert('⚠️ El monto recibido es insuficiente. Por favor ingresa un monto mayor o igual al total.');
+        return;
+      }
     }
+    
+    // Procesar guardado directamente (tanto para efectivo como QR)
+    // El método de pago se guardará automáticamente en la BD
+    this.procesarGuardado();
+    
+    /* DESACTIVADO: Flujo completo de QR con BNB
+    // Si es QR, iniciar flujo BNB
+    else {
+      this.iniciarPagoQR();
+    }
+    */
+  }
 
+  async iniciarPagoQR() {
+    this.cargando = true;
+    try {
+      console.log('🔵 Generando QR BNB para monto:', this.total);
+      
+      // 1. Llamar al banco
+      const resp = await this.bnbService.generarQR(this.total, `Mesa ${this.mesaSeleccionada}`);
+      
+      if (resp.success) {
+        // El banco devuelve la imagen en bytes (Base64)
+        this.qrIdActual = resp.id;
+        this.qrImageBase64 = `data:image/png;base64,${resp.qr}`; 
+        
+        // 2. Mostrar Modal
+        this.mostrarModalQR = true;
+        this.estadoPago = 'esperando';
+        this.cargando = false;
+
+        console.log('✅ QR generado con ID:', this.qrIdActual);
+
+        // 3. Empezar a verificar si pagan (Polling cada 3 seg)
+        this.comenzarVerificacion();
+      } else {
+        console.error('❌ Error BNB:', resp.message);
+        alert('Error BNB: ' + resp.message);
+        this.cargando = false;
+      }
+    } catch (e) {
+      console.error('❌ Error de conexión con el Banco:', e);
+      alert('Error de conexión con el Banco. Verifica tu conexión e intenta nuevamente.');
+      this.cargando = false;
+    }
+  }
+
+  comenzarVerificacion() {
+    this.pollingInterval = setInterval(async () => {
+      if (!this.qrIdActual) return;
+
+      try {
+        const estado = await this.bnbService.verificarEstadoQR(this.qrIdActual);
+        console.log('🔍 Estado QR:', estado);
+        
+        // StatusId: 2 = USADO (Pagado)
+        if (estado.statusid === 2) {
+          this.pagoConfirmado();
+        }
+        // StatusId: 3 = EXPIRADO
+        else if (estado.statusid === 3) {
+          this.pagoExpirado();
+        }
+      } catch (error) {
+        console.error('Error al verificar estado QR:', error);
+      }
+    }, 3000); // Revisar cada 3 segundos
+  }
+
+  pagoConfirmado() {
+    clearInterval(this.pollingInterval); // Dejar de preguntar
+    this.estadoPago = 'pagado';
+    console.log('✅ Pago confirmado por BNB');
+    
+    // Esperar 1.5 seg para que el cajero vea el check verde y guardar
+    setTimeout(() => {
+      this.mostrarModalQR = false;
+      this.procesarGuardado(); // Guardar en Supabase
+    }, 1500);
+  }
+
+  pagoExpirado() {
+    clearInterval(this.pollingInterval);
+    this.estadoPago = 'error';
+    console.log('❌ QR expirado');
+    alert('⏱️ El QR ha expirado. Por favor genera uno nuevo.');
+  }
+
+  async procesarGuardado() {
     this.cargando = true;
 
     try {
@@ -645,7 +824,7 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
         this.total, 
         this.carrito,
         this.metodoPagoSeleccionado,
-        this.tipoOrdenSeleccionado // Agregar tipo de orden
+        this.tipoOrdenSeleccionado
       );
 
       if (resultado) {
@@ -662,7 +841,8 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
           usuario: this.usuarioActual,
           items: this.carrito.map(item => ({
             cantidad: item.cantidad,
-            nombre: item.producto.nombre,
+            nombre: item.nombrePersonalizado || item.producto.nombre,
+            precioUnitario: item.precioPersonalizado || item.producto.precio,
             subtotal: item.subtotal,
             notas: item.notas || ''
           })),
@@ -692,6 +872,7 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
           this.mesaSeleccionada = '';
           this.ultimoPedidoId = null;
           this.montoRecibido = 0; // Resetear monto recibido
+          this.limpiarQR(); // Limpiar datos QR
           
           // Forzar detección de cambios después de resetear
           this.cdr.detectChanges();
@@ -707,6 +888,21 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
       console.error(error);
       this.cargando = false;
       alert('❌ Error de conexión.');
+    }
+  }
+
+  cancelarQR() {
+    clearInterval(this.pollingInterval);
+    this.mostrarModalQR = false;
+    this.limpiarQR();
+  }
+
+  limpiarQR() {
+    this.qrImageBase64 = null;
+    this.qrIdActual = null;
+    this.estadoPago = 'esperando';
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
     }
   }
   

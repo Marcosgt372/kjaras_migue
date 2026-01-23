@@ -92,6 +92,54 @@ export class PedidoService {
     this.cargarProductos();
   }
 
+  async crearProducto(producto: Omit<Producto, 'id'>): Promise<Producto | null> {
+    try {
+      console.log('🔵 Intentando crear producto:', producto);
+      
+      const { data, error } = await this.supabase
+        .from('productos')
+        .insert([{
+          nombre: producto.nombre,
+          precio: producto.precio,
+          categoria: producto.categoria,
+          stock: producto.stock,
+          imagen: producto.imagen,
+          activo: producto.activo ?? true
+        }])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error de Supabase al crear producto:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        return null;
+      }
+      
+      if (!data) {
+        console.error('❌ No se recibieron datos después de crear el producto');
+        return null;
+      }
+      
+      console.log('✅ Producto creado exitosamente:', data);
+      
+      // Recargar la lista de productos para que aparezca el nuevo
+      await this.cargarProductos();
+      
+      return data;
+    } catch (e: any) {
+      console.error('❌ Excepción al crear producto:', {
+        error: e,
+        message: e?.message,
+        stack: e?.stack
+      });
+      return null;
+    }
+  }
+
   // --- 2. CREAR PEDIDO (Para Caja) ---
   async crearPedido(mesa: string, total: number, itemsCarrito: any[], metodoPago: string = 'efectivo', tipoOrden: string = 'mesa') {
     // Validar que haya caja abierta
@@ -297,6 +345,8 @@ export class PedidoService {
       .select(`
         *,
         detalle_pedidos (
+          id,
+          producto_id,
           cantidad, 
           precio_unitario,
           subtotal,
@@ -354,6 +404,72 @@ export class PedidoService {
       .neq('estado', 'rechazado'); // No sumar rechazados
     
     return data?.reduce((acc, p) => acc + p.total, 0) || 0;
+  }
+  
+  // --- ACTUALIZAR PEDIDO ---
+  async actualizarPedido(pedidoId: number, datos: any) {
+    try {
+      console.log('🔵 Actualizando pedido:', pedidoId, datos);
+      
+      // 1. Actualizar datos principales del pedido
+      const { error: errorPedido } = await this.supabase
+        .from('pedidos')
+        .update({
+          mesa: datos.mesa,
+          estado: datos.estado,
+          metodo_pago: datos.metodo_pago,
+          total: datos.total
+        })
+        .eq('id', pedidoId);
+      
+      if (errorPedido) {
+        console.error('❌ Error al actualizar pedido:', errorPedido);
+        throw errorPedido;
+      }
+      
+      // 2. Eliminar items antiguos - IMPORTANTE: esperar a que termine
+      console.log('🗑️ Eliminando items antiguos del pedido', pedidoId);
+      const { data: deletedData, error: errorDelete } = await this.supabase
+        .from('detalle_pedidos')
+        .delete()
+        .eq('pedido_id', pedidoId)
+        .select(); // Añadido select para confirmar eliminación
+      
+      if (errorDelete) {
+        console.error('❌ Error al eliminar items antiguos:', errorDelete);
+        throw errorDelete;
+      }
+      
+      console.log('✅ Items eliminados:', deletedData?.length || 0);
+      
+      // 3. Insertar items nuevos/actualizados
+      const itemsParaInsertar = datos.items.map((item: any) => ({
+        pedido_id: pedidoId,
+        producto_id: item.producto_id || 1, // ID por defecto si es nuevo
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        notas: item.notas || ''
+      }));
+      
+      console.log('➕ Insertando', itemsParaInsertar.length, 'items nuevos');
+      
+      const { data: insertedData, error: errorInsert } = await this.supabase
+        .from('detalle_pedidos')
+        .insert(itemsParaInsertar)
+        .select();
+      
+      if (errorInsert) {
+        console.error('❌ Error al insertar nuevos items:', errorInsert);
+        throw errorInsert;
+      }
+      
+      console.log('✅ Items insertados:', insertedData?.length || 0);
+      console.log('✅ Pedido actualizado correctamente');
+      return true;
+    } catch (error) {
+      console.error('❌ Error en actualizarPedido:', error);
+      throw error;
+    }
   }
 
   // --- REALTIME ---

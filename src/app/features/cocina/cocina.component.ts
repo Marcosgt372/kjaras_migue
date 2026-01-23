@@ -45,7 +45,7 @@ interface PedidoUI extends Pedido {
 
       <div class="flex-1 overflow-y-auto p-6 scrollbar-hide">
         
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-max">
           
           <div *ngIf="(pedidosUI$ | async)?.length === 0" class="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 opacity-60">
              <i class="fa-solid fa-utensils text-6xl mb-4"></i>
@@ -54,7 +54,7 @@ interface PedidoUI extends Pedido {
           </div>
 
           <div *ngFor="let pedido of pedidosUI$ | async" 
-               class="relative h-[400px] w-full select-none"> <div class="absolute inset-0 rounded-[30px] overflow-hidden flex shadow-inner bg-gray-200 border-2 border-gray-200">
+               class="relative w-full select-none min-h-[400px]"> <div class="absolute inset-0 rounded-[30px] overflow-hidden flex shadow-inner bg-gray-200 border-2 border-gray-200">
                 
                 <div class="w-1/2 h-full flex flex-col justify-center items-center gap-4 p-4 transition-opacity duration-200"
                      [style.opacity]="pedido.swipeX > 50 ? 1 : 0">
@@ -88,7 +88,7 @@ interface PedidoUI extends Pedido {
                  (mouseleave)="endDrag(pedido)"
                  (touchend)="endDrag(pedido)">
               
-              <div class="p-5 border-b border-gray-100 flex justify-between items-start"
+              <div class="p-5 border-b border-gray-100 flex justify-between items-start flex-shrink-0"
                    [ngClass]="{'bg-yellow-50': pedido.estado === 'cocinando', 'bg-white': pedido.estado === 'pendiente'}">
                  <div>
                    <!-- Mostrar tipo de orden con ícono -->
@@ -118,22 +118,29 @@ interface PedidoUI extends Pedido {
                  </div>
               </div>
 
-              <div class="flex-1 overflow-y-auto p-5 space-y-3">
+              <div class="flex-1 overflow-y-auto p-5 space-y-3 min-h-0">
                  <ng-container *ngFor="let item of pedido.items">
                    <!-- Solo mostrar si es un plato -->
-                   <div *ngIf="item.producto.categoria === 'plato'" class="flex items-center justify-between bg-gray-50 rounded-xl p-3 border border-gray-100">
-                     <div class="flex items-center gap-3">
-                       <div class="w-10 h-10 bg-[#800020] text-white rounded-lg flex items-center justify-center font-bold text-lg shadow-md flex-shrink-0">
-                         {{ item.cantidad }}
+                   <div *ngIf="item.producto.categoria === 'plato'" class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                     <div class="flex items-center justify-between">
+                       <div class="flex items-center gap-3">
+                         <div class="w-10 h-10 bg-[#800020] text-white rounded-lg flex items-center justify-center font-bold text-lg shadow-md flex-shrink-0">
+                           {{ item.cantidad }}
+                         </div>
+                         <p class="font-bold text-gray-800 text-lg">{{ item.producto.nombre }}</p>
                        </div>
-                       <p class="font-bold text-gray-800 text-lg">{{ item.producto.nombre }}</p>
+                       <p class="font-black text-[#800020] text-xl">{{ item.producto.precio }} Bs</p>
                      </div>
-                     <p class="font-black text-[#800020] text-xl">{{ item.producto.precio }} Bs</p>
+                     <!-- Mostrar notas si existen -->
+                     <div *ngIf="item.notas && item.notas.trim()" class="mt-2 ml-13 pl-3 border-l-2 border-orange-300 bg-orange-50 rounded-r-lg p-2">
+                       <p class="text-xs font-bold text-orange-600 uppercase mb-1">📝 Nota:</p>
+                       <p class="text-sm italic text-gray-700">{{ item.notas }}</p>
+                     </div>
                    </div>
                  </ng-container>
               </div>
 
-              <div class="p-3 bg-gray-50 text-center text-[10px] text-gray-400 font-bold uppercase tracking-wider flex justify-between items-center px-6">
+              <div class="p-3 bg-gray-50 text-center text-[10px] text-gray-400 font-bold uppercase tracking-wider flex justify-between items-center px-6 flex-shrink-0">
                  <span class="flex items-center gap-1"><i class="fa-solid fa-arrow-left"></i> Confirmar</span>
                  <span class="flex items-center gap-1">Opciones <i class="fa-solid fa-arrow-right"></i></span>
               </div>

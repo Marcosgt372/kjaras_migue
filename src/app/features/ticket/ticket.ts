@@ -17,6 +17,7 @@ export interface TicketData {
 export interface TicketItem {
   cantidad: number;
   nombre: string;
+  precioUnitario: number;
   subtotal: number;
   notas?: string;
 }

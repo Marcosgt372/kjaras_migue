@@ -42,6 +42,7 @@
       <div class="flex justify-between font-bold mb-1">
         <span class="min-w-[30px]">Cant</span>
         <span class="flex-1">Descripción</span>
+        <span class="text-right min-w-[50px]">P.Unit</span>
         <span class="text-right min-w-[60px]">Total</span>
       </div>
       <div class="text-center my-1">--------------------------------</div>
@@ -49,6 +50,7 @@
         <div class="flex justify-between gap-1">
           <span class="min-w-[30px]">{{ item.cantidad }}x</span>
           <span class="flex-1">{{ item.nombre }}</span>
+          <span class="text-right min-w-[50px]">{{ item.precioUnitario.toFixed(2) }}</span>
           <span class="text-right min-w-[60px]">{{ item.subtotal.toFixed(2) }} Bs</span>
         </div>
         <div *ngIf="item.notas" class="text-[10px] italic text-gray-600 ml-8">
@@ -73,7 +75,6 @@
     <div class="mt-4">
       <div class="text-center my-1">================================</div>
       <p class="text-center font-bold my-1">¡GRACIAS POR SU PREFERENCIA!</p>
-      <p class="text-center text-[10px] mt-2">Desarrollado por TuEmpresa</p>
       <div class="text-center my-1">================================</div>
     </div>
   </div>
