@@ -1,0 +1,10 @@
+{
+  "/api-bnb": {
+    "target": "http://test.bnb.com.bo",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api-bnb": ""
+    }
+  }
+}
