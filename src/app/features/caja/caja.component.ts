@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { PedidoService, Producto } from '../../services/pedido.service';
-import { BnbService } from '../../../../../src/app/services/bnb.service';
+//import { BnbService } from '../../../../../src/app/services/bnb.service';
 import { TicketComponent } from '../ticket/ticket';
 
 
@@ -466,7 +466,7 @@ export class CajaComponent implements OnInit {
   // Producto personalizado
   productoPersonalizadoNombre: string = '';
   productoPersonalizadoPrecio: number = 0;
-  private readonly PRODUCTO_PLANTILLA_ID = 32; // ID del producto plantilla en la BD
+  productoPlantillaId: number | null = null; // ID dinámico recuperado de la BD
   
   productos: Producto[] = [];
   carrito: ItemPedido[] = [];
@@ -490,7 +490,7 @@ export class CajaComponent implements OnInit {
     private pedidoService: PedidoService,
     private cdr: ChangeDetectorRef,
     private router: Router,
-    private bnbService: BnbService
+    //private bnbService: BnbService
   ) {}
 
   toggleCarrito() {
@@ -512,6 +512,20 @@ export class CajaComponent implements OnInit {
     this.pedidoService.productos$.subscribe(data => {
       this.productos = data;
       this.cargandoProductos = false; // Desactivar loading cuando los productos se cargan
+
+      // Buscar PRODUCTO PERSONALIZADO automáticamente
+      const productoCustom = this.productos.find(p => 
+        p.nombre.toLowerCase().includes('personalizado') || 
+        p.nombre.toLowerCase().includes('custom') ||
+        p.categoria.toLowerCase() === 'personalizado'
+      );
+
+      if (productoCustom) {
+        this.productoPlantillaId = productoCustom.id;
+        console.log('✅ Producto plantilla encontrado:', productoCustom.nombre, 'ID:', productoCustom.id);
+      } else {
+        console.warn('⚠️ NO SE ENCONTRÓ UN PRODUCTO PLANTILLA "PERSONALIZADO"');
+      }
     });
 
     // 2. Suscribirse al estado de la caja
@@ -644,11 +658,18 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
       return;
     }
     
-    // Buscar el producto plantilla en la lista de productos
-    const productoPlantilla = this.productos.find(p => p.id === this.PRODUCTO_PLANTILLA_ID);
+
+    
+    if (!this.productoPlantillaId) {
+      alert('❌ Error Compuesto: No se encontró un producto "Personalizado" en la base de datos. Por favor crea uno en el menú para usar esta función.');
+      return;
+    }
+    
+    // Buscar el producto plantilla usando el ID dinámico
+    const productoPlantilla = this.productos.find(p => p.id === this.productoPlantillaId);
     
     if (!productoPlantilla) {
-      alert('❌ Error: No se encontró el producto plantilla. Verifica que existe un producto con ID 32 en la base de datos.');
+      alert('❌ Error: El producto plantilla no está disponible en la lista actual.');
       return;
     }
     
@@ -666,7 +687,7 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
     
     // Buscar si ya existe este producto personalizado en el carrito
     const itemExistente = this.carrito.find(
-      i => i.producto.id === this.PRODUCTO_PLANTILLA_ID && 
+      i => i.producto.id === this.productoPlantillaId && 
            i.nombrePersonalizado === nombrePersonalizado &&
            i.precioPersonalizado === precioPersonalizado
     );
@@ -740,80 +761,14 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
     */
   }
 
-  async iniciarPagoQR() {
-    this.cargando = true;
-    try {
-      console.log('🔵 Generando QR BNB para monto:', this.total);
-      
-      // 1. Llamar al banco
-      const resp = await this.bnbService.generarQR(this.total, `Mesa ${this.mesaSeleccionada}`);
-      
-      if (resp.success) {
-        // El banco devuelve la imagen en bytes (Base64)
-        this.qrIdActual = resp.id;
-        this.qrImageBase64 = `data:image/png;base64,${resp.qr}`; 
-        
-        // 2. Mostrar Modal
-        this.mostrarModalQR = true;
-        this.estadoPago = 'esperando';
-        this.cargando = false;
+  /* DESACTIVADO: Toda la integración con BNB QR
+  async iniciarPagoQR() { ... }
+  comenzarVerificacion() { ... }
+  pagoConfirmado() { ... }
+  pagoExpirado() { ... }
+  */
 
-        console.log('✅ QR generado con ID:', this.qrIdActual);
 
-        // 3. Empezar a verificar si pagan (Polling cada 3 seg)
-        this.comenzarVerificacion();
-      } else {
-        console.error('❌ Error BNB:', resp.message);
-        alert('Error BNB: ' + resp.message);
-        this.cargando = false;
-      }
-    } catch (e) {
-      console.error('❌ Error de conexión con el Banco:', e);
-      alert('Error de conexión con el Banco. Verifica tu conexión e intenta nuevamente.');
-      this.cargando = false;
-    }
-  }
-
-  comenzarVerificacion() {
-    this.pollingInterval = setInterval(async () => {
-      if (!this.qrIdActual) return;
-
-      try {
-        const estado = await this.bnbService.verificarEstadoQR(this.qrIdActual);
-        console.log('🔍 Estado QR:', estado);
-        
-        // StatusId: 2 = USADO (Pagado)
-        if (estado.statusid === 2) {
-          this.pagoConfirmado();
-        }
-        // StatusId: 3 = EXPIRADO
-        else if (estado.statusid === 3) {
-          this.pagoExpirado();
-        }
-      } catch (error) {
-        console.error('Error al verificar estado QR:', error);
-      }
-    }, 3000); // Revisar cada 3 segundos
-  }
-
-  pagoConfirmado() {
-    clearInterval(this.pollingInterval); // Dejar de preguntar
-    this.estadoPago = 'pagado';
-    console.log('✅ Pago confirmado por BNB');
-    
-    // Esperar 1.5 seg para que el cajero vea el check verde y guardar
-    setTimeout(() => {
-      this.mostrarModalQR = false;
-      this.procesarGuardado(); // Guardar en Supabase
-    }, 1500);
-  }
-
-  pagoExpirado() {
-    clearInterval(this.pollingInterval);
-    this.estadoPago = 'error';
-    console.log('❌ QR expirado');
-    alert('⏱️ El QR ha expirado. Por favor genera uno nuevo.');
-  }
 
   async procesarGuardado() {
     this.cargando = true;
@@ -890,6 +845,7 @@ Diferencia: ${cierre.monto_final - cierre.monto_inicial - cierre.total_ventas} B
       alert('❌ Error de conexión.');
     }
   }
+
 
   cancelarQR() {
     clearInterval(this.pollingInterval);
