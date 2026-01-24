@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { PedidoService } from '../../services/pedido.service';
+import { TicketComponent } from '../ticket/ticket';
 
 
 @Component({
   selector: 'app-historial',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TicketComponent],
   template: `
     <div class="p-8 bg-gray-50 min-h-screen">
       
@@ -325,6 +326,10 @@ import { PedidoService } from '../../services/pedido.service';
                     class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition">
               Cancelar
             </button>
+            <button (click)="reimprimirTicket()" 
+                    class="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition">
+              <i class="fa-solid fa-print mr-2"></i> Reimprimir
+            </button>
             <button (click)="guardarCambios()" 
                     class="flex-1 bg-[#800020] text-white py-3 rounded-xl font-bold hover:bg-[#600018] transition">
               <i class="fa-solid fa-save mr-2"></i> Guardar Cambios
@@ -333,6 +338,9 @@ import { PedidoService } from '../../services/pedido.service';
 
         </div>
       </div>
+
+      <!-- Componente de Ticket para Impresión -->
+      <app-ticket [ticketData]="ticketData"></app-ticket>
 
     </div>
   `,
@@ -369,6 +377,19 @@ export class HistorialComponent implements OnInit {
   pedidoEditando: any = null;
   itemsEditados: any[] = [];
   totalEditado: number = 0;
+  
+  // Datos para el ticket de impresión
+  ticketData: any = {
+    fecha: '',
+    hora: '',
+    mesa: '',
+    pedidoId: 0,
+    usuario: '',
+    items: [],
+    total: 0,
+    metodoPago: 'efectivo',
+    tipoOrden: 'mesa'
+  };
 
   constructor(
     private pedidoService: PedidoService,
@@ -557,5 +578,34 @@ export class HistorialComponent implements OnInit {
       // Recargar datos
       this.cargarDatos();
     }
+  }
+  
+  reimprimirTicket() {
+    if (!this.pedidoEditando) return;
+    
+    // Preparar datos del ticket desde el pedido actual
+    const fechaPedido = new Date(this.pedidoEditando.created_at);
+    this.ticketData = {
+      fecha: fechaPedido.toLocaleDateString('es-BO'),
+      hora: fechaPedido.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' }),
+      mesa: this.pedidoEditando.mesa,
+      pedidoId: this.pedidoEditando.id,
+      usuario: 'Sistema', // No tenemos el usuario original guardado
+      items: this.itemsEditados.map(item => ({
+        cantidad: item.cantidad,
+        nombre: item.nombre,
+        precioUnitario: item.precio_unitario,
+        subtotal: item.subtotal,
+        notas: item.notas || ''
+      })),
+      total: this.totalEditado,
+      metodoPago: this.pedidoEditando.metodo_pago || 'efectivo',
+      tipoOrden: this.pedidoEditando.opcion || 'mesa'
+    };
+    
+    // Esperar un momento para que Angular actualice el componente de ticket
+    setTimeout(() => {
+      window.print();
+    }, 100);
   }
 }
